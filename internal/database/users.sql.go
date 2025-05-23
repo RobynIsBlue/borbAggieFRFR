@@ -57,32 +57,54 @@ func (q *Queries) DeleteTableRows(ctx context.Context) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT name FROM users WHERE name = $1
+SELECT id, created_at, updated_at, name FROM users WHERE name = $1
 `
 
-func (q *Queries) GetUser(ctx context.Context, name string) (string, error) {
+func (q *Queries) GetUser(ctx context.Context, name string) (User, error) {
 	row := q.db.QueryRowContext(ctx, getUser, name)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
+const getUserName = `-- name: GetUserName :one
+SELECT name FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserName(ctx context.Context, id uuid.UUID) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserName, id)
+	var name string
 	err := row.Scan(&name)
 	return name, err
 }
 
 const getUsers = `-- name: GetUsers :many
-SELECT name FROM users
+SELECT id, created_at, updated_at, name FROM users
 `
 
-func (q *Queries) GetUsers(ctx context.Context) ([]string, error) {
+func (q *Queries) GetUsers(ctx context.Context) ([]User, error) {
 	rows, err := q.db.QueryContext(ctx, getUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []User
 	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, name)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

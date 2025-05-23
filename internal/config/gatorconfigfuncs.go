@@ -56,7 +56,6 @@ const dbUrl = `postgres://postgres:postgres@localhost:5432/gator`
 
 func Read() Config {
 	path := getHomePath()
-	fmt.Println(path)
 	file, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Println(err)
@@ -136,13 +135,17 @@ func HandlerReset(s *State, cmd Command) error {
 }
 
 func HandlerGetUsers(s *State, cmd Command) error {
-	users, err := s.Db.GetUsers(context.Background())
+	usersDatabase, err := s.Db.GetUsers(context.Background())
+	var users []string
+	for _, user := range usersDatabase {
+		users = append(users, user.Name)
+	}
 	if err != nil {
 		return err
 	}
 	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
 	for _, u := range users {
-		if u == user {
+		if u == user.Name {
 			fmt.Printf("%s (current)\n", u)
 		} else {
 			fmt.Println(u)
@@ -166,14 +169,39 @@ func HandlerAddFeed(s *State, cmd Command) error {
 	}
 	name := cmd.Arguments[0]
 	url := cmd.Arguments[1]
-	s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
+	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
+	if err != nil {
+		return err
+	}
+	feed, err := s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Name:      name,
 		Url:       url,
-		UserID:    s.Db.GetUser(),
+		UserID:    user.ID,
 	})
+	if err != nil {
+		return err
+	}
+	fmt.Println(feed)
+	return nil
+}
+
+func HandlerFeeds(s *State, cmd Command) error {
+	feeds, err := s.Db.GetFeeds(context.Background())
+	if err != nil {
+		return err
+	}
+	for _, feed := range feeds {
+		userName, err := s.Db.GetUserName(context.Background(), feed.UserID)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Name of Feed: %s\nURL of Feed: %s\nUser of Feed: %s\n\n",
+			feed.Name, feed.Url, userName)
+	}
+	return nil
 }
 
 func (c *Commands) Run(s *State, cmd Command) error {

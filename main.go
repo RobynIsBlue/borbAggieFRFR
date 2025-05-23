@@ -28,6 +28,7 @@ func main() {
 	cmds.Register("users", config.HandlerGetUsers)
 	cmds.Register("agg", config.HandlerAgg)
 	cmds.Register("addfeed", config.HandlerAddFeed)
+	cmds.Register("feeds", config.HandlerFeeds)
 
 	userInput := os.Args
 	if len(userInput) < 2 {
