@@ -4,8 +4,12 @@ import (
 	"borbAggregatorFRFR/internal/database"
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
+	"io"
+	"net/http"
 	"os"
 	"time"
 
@@ -29,6 +33,22 @@ type Command struct {
 
 type Commands struct {
 	CommandFunc map[string]func(*State, Command) error
+}
+
+type RSSFeed struct {
+	Channel struct {
+		Title       string    `xml:"title"`
+		Link        string    `xml:"link"`
+		Description string    `xml:"description"`
+		Item        []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
 }
 
 const configFileName = ".gatorconfig.json"
@@ -131,6 +151,31 @@ func HandlerGetUsers(s *State, cmd Command) error {
 	return nil
 }
 
+func HandlerAgg(s *State, cmd Command) error {
+	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
+	if err != nil {
+		return err
+	}
+	fmt.Println(feed)
+	return nil
+}
+
+func HandlerAddFeed(s *State, cmd Command) error {
+	if len(cmd.Arguments) < 2 {
+		return errors.New("must have at least two arguments")
+	}
+	name := cmd.Arguments[0]
+	url := cmd.Arguments[1]
+	s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Name:      name,
+		Url:       url,
+		UserID:    s.Db.GetUser(),
+	})
+}
+
 func (c *Commands) Run(s *State, cmd Command) error {
 	if _, ok := c.CommandFunc[cmd.Name]; ok {
 		err := c.CommandFunc[cmd.Name](s, cmd)
@@ -143,4 +188,39 @@ func (c *Commands) Run(s *State, cmd Command) error {
 
 func (c *Commands) Register(name string, f func(*State, Command) error) {
 	c.CommandFunc[name] = f
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
+	var client http.Client
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", "gator")
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var item RSSFeed
+	err = xml.Unmarshal(data, &item)
+	if err != nil {
+		return nil, err
+	}
+
+	item.Channel.Title = html.UnescapeString(item.Channel.Title)
+	item.Channel.Description = html.UnescapeString(item.Channel.Description)
+	for _, r := range item.Channel.Item {
+		r.Title = html.UnescapeString(r.Title)
+		r.Description = html.UnescapeString(r.Description)
+	}
+
+	return &item, nil
 }

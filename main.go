@@ -13,6 +13,7 @@ import (
 const dbUrl = `postgres://postgres:postgres@localhost:5432/gator`
 
 func main() {
+
 	conf := config.Read()
 	var stateVar config.State
 	stateVar.Conf = &conf
@@ -25,6 +26,8 @@ func main() {
 	cmds.Register("register", config.HandlerRegister)
 	cmds.Register("reset", config.HandlerReset)
 	cmds.Register("users", config.HandlerGetUsers)
+	cmds.Register("agg", config.HandlerAgg)
+	cmds.Register("addfeed", config.HandlerAddFeed)
 
 	userInput := os.Args
 	if len(userInput) < 2 {
