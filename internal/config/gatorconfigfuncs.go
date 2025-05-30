@@ -167,16 +167,12 @@ func HandlerAgg(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerAddFeed(s *State, cmd Command) error {
+func HandlerAddFeed(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) < 2 {
 		return errors.New("must have at least two arguments")
 	}
 	name := cmd.Arguments[0]
 	url := cmd.Arguments[1]
-	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
-	if err != nil {
-		return err
-	}
 	feed, err := s.Db.CreateFeed(context.Background(), database.CreateFeedParams{
 		ID:        uuid.New(),
 		CreatedAt: time.Now(),
@@ -190,7 +186,7 @@ func HandlerAddFeed(s *State, cmd Command) error {
 	}
 	err = HandlerFollow(s, Command{
 		Arguments: []string{url},
-	})
+	}, user)
 	if err != nil {
 		return err
 	}
@@ -214,16 +210,12 @@ func HandlerFeeds(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollow(s *State, cmd Command) error {
+func HandlerFollow(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) == 0 {
 		return errors.New("need url to follow")
 	}
 
 	feed, err := s.Db.GetFeedFromURL(context.Background(), cmd.Arguments[0])
-	if err != nil {
-		return err
-	}
-	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
 	if err != nil {
 		return err
 	}
@@ -242,11 +234,7 @@ func HandlerFollow(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerFollowing(s *State, cmd Command) error {
-	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
-	if err != nil {
-		return err
-	}
+func HandlerFollowing(s *State, cmd Command, user database.User) error {
 	feeds, err := s.Db.GetFeedFollowForUser(context.Background(), user.ID)
 	if err != nil {
 		return err
@@ -309,4 +297,14 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error) {
 	}
 
 	return &item, nil
+}
+
+func MiddlewareLoggedIn(handler func(s *State, cmd Command, user database.User) error) func(*State, Command) error {
+	return func(s *State, cmd Command) error {
+		user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
+		if err != nil {
+			return errors.New("not logged in")
+		}
+		return handler(s, cmd, user)
+	}
 }
