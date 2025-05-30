@@ -20,3 +20,7 @@ JOIN feeds ON inserted_feed_follow.feed_id = feeds.id;
 SELECT *
 FROM feed_follows
 WHERE $1 = user_id;
+
+-- name: DeleteFollowRecord :exec
+DELETE FROM feed_follows
+WHERE user_id = $1 AND feed_id = $2;

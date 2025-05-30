@@ -250,6 +250,21 @@ func HandlerFollowing(s *State, cmd Command, user database.User) error {
 	return nil
 }
 
+func HandlerUnfollow(s *State, cmd Command, user database.User) error {
+	feed, err := s.Db.GetFeedFromURL(context.Background(), cmd.Arguments[0])
+	if err != nil {
+		return errors.New("could not find url")
+	}
+	err = s.Db.DeleteFollowRecord(context.Background(), database.DeleteFollowRecordParams{
+		UserID: user.ID,
+		FeedID: feed.ID,
+	})
+	if err != nil {
+		return errors.New("could not delete url")
+	}
+	return nil
+}
+
 func (c *Commands) Run(s *State, cmd Command) error {
 	if _, ok := c.CommandFunc[cmd.Name]; ok {
 		err := c.CommandFunc[cmd.Name](s, cmd)
