@@ -52,7 +52,8 @@ type RSSItem struct {
 }
 
 const configFileName = ".gatorconfig.json"
-const dbUrl = `postgres://postgres:postgres@localhost:5432/gator`
+
+// const dbUrl = `postgres://postgres:postgres@localhost:5432/gator`
 
 func Read() Config {
 	path := getHomePath()
@@ -76,7 +77,7 @@ func SetUser(user string, config Config) {
 		fmt.Println(err)
 		return
 	}
-	err = os.WriteFile(path, jsonData, 0644)
+	os.WriteFile(path, jsonData, 0644)
 }
 
 func getHomePath() string {
@@ -144,6 +145,9 @@ func HandlerGetUsers(s *State, cmd Command) error {
 		return err
 	}
 	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
+	if err != nil {
+		return err
+	}
 	for _, u := range users {
 		if u == user.Name {
 			fmt.Printf("%s (current)\n", u)
@@ -184,6 +188,12 @@ func HandlerAddFeed(s *State, cmd Command) error {
 	if err != nil {
 		return err
 	}
+	err = HandlerFollow(s, Command{
+		Arguments: []string{url},
+	})
+	if err != nil {
+		return err
+	}
 	fmt.Println(feed)
 	return nil
 }
@@ -200,6 +210,54 @@ func HandlerFeeds(s *State, cmd Command) error {
 		}
 		fmt.Printf("Name of Feed: %s\nURL of Feed: %s\nUser of Feed: %s\n\n",
 			feed.Name, feed.Url, userName)
+	}
+	return nil
+}
+
+func HandlerFollow(s *State, cmd Command) error {
+	if len(cmd.Arguments) == 0 {
+		return errors.New("need url to follow")
+	}
+
+	feed, err := s.Db.GetFeedFromURL(context.Background(), cmd.Arguments[0])
+	if err != nil {
+		return err
+	}
+	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.Db.CreateFeedFollow(context.Background(), database.CreateFeedFollowParams{
+		ID:        uuid.New(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		UserID:    user.ID,
+		FeedID:    feed.ID,
+	})
+	if err != nil {
+		return errors.New("already added link for this user")
+	}
+	fmt.Printf("feed %s added for user %s\n", feed.Name, user.Name)
+	return nil
+}
+
+func HandlerFollowing(s *State, cmd Command) error {
+	user, err := s.Db.GetUser(context.Background(), s.Conf.CurrentUserName)
+	if err != nil {
+		return err
+	}
+	feeds, err := s.Db.GetFeedFollowForUser(context.Background(), user.ID)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s is following:\n", s.Conf.CurrentUserName)
+	for _, feed := range feeds {
+		feed, err := s.Db.GetFeedFromID(context.Background(), feed.FeedID)
+		if err != nil {
+			return err
+		}
+		fmt.Println(feed.Name)
 	}
 	return nil
 }
