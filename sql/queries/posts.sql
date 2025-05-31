@@ -14,6 +14,8 @@ VALUES (
 -- name: GetPostsForUser :many
 SELECT * 
 FROM posts
-JOIN feed_follows ON posts.user_id = feed_follows.user_id
-ORDER BY posts.created_at DESC
-LIMIT $1;
+JOIN feed_follows
+ON posts.feed_id = feed_follows.feed_id
+AND $1 = feed_follows.user_id
+LIMIT $2;
+

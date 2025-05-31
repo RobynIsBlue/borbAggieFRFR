@@ -14,7 +14,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type Config struct {
@@ -159,7 +161,7 @@ func HandlerGetUsers(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerBrowse(s *State, cmd Command) error {
+func HandlerBrowse(s *State, cmd Command, user database.User) error {
 	if len(cmd.Arguments) == 0 {
 		cmd.Arguments = append(cmd.Arguments, "2")
 	}
@@ -167,12 +169,15 @@ func HandlerBrowse(s *State, cmd Command) error {
 	if err != nil {
 		return errors.New("invalid limit variable")
 	}
-	posts, err := s.Db.GetPostsForUser(context.Background(), int32(limit))
+	posts, err := s.Db.GetPostsForUser(context.Background(), database.GetPostsForUserParams{
+		UserID: user.ID,
+		Limit:  int32(limit),
+	})
 	if err != nil {
 		return errors.New("could not get posts")
 	}
 	for _, post := range posts {
-		fmt.Println(post)
+		spew.Dump(post)
 	}
 	return nil
 }
@@ -211,8 +216,10 @@ func HandlerScrapeFeeds(s *State, cmd Command) error {
 				FeedID:      feedToFetch.ID,
 			})
 			if err != nil {
-				fmt.Println(err)
-				fmt.Printf("%T\n", err)
+				if err, ok := err.(*pq.Error); !ok {
+					fmt.Println(err)
+					fmt.Printf("%T\n", err)
+				}
 			}
 		}
 	}
