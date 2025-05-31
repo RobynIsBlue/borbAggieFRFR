@@ -26,7 +26,7 @@ func main() {
 	cmds.Register("register", config.HandlerRegister)
 	cmds.Register("reset", config.HandlerReset)
 	cmds.Register("users", config.HandlerGetUsers)
-	cmds.Register("agg", config.HandlerAgg)
+	cmds.Register("agg", config.HandlerScrapeFeeds)
 	cmds.Register("addfeed", config.MiddlewareLoggedIn(config.HandlerAddFeed))
 	cmds.Register("feeds", config.HandlerFeeds)
 	cmds.Register("follow", config.MiddlewareLoggedIn(config.HandlerFollow))

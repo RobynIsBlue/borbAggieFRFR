@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -158,13 +159,63 @@ func HandlerGetUsers(s *State, cmd Command) error {
 	return nil
 }
 
-func HandlerAgg(s *State, cmd Command) error {
-	feed, err := fetchFeed(context.Background(), "https://www.wagslane.dev/index.xml")
-	if err != nil {
-		return err
+func HandlerBrowse(s *State, cmd Command) error {
+	if len(cmd.Arguments) == 0 {
+		cmd.Arguments = append(cmd.Arguments, "2")
 	}
-	fmt.Println(feed)
+	limit, err := strconv.Atoi(cmd.Arguments[0])
+	if err != nil {
+		return errors.New("invalid limit variable")
+	}
+	posts, err := s.Db.GetPostsForUser(context.Background(), int32(limit))
+	if err != nil {
+		return errors.New("could not get posts")
+	}
+	for _, post := range posts {
+		fmt.Println(post)
+	}
 	return nil
+}
+
+func HandlerScrapeFeeds(s *State, cmd Command) error {
+	timeFromUser := cmd.Arguments[0]
+	fmt.Printf("Collecting feeds every %s", timeFromUser)
+	parsedTime, err := time.ParseDuration(timeFromUser)
+	if err != nil {
+		return errors.New("could not parse time specified")
+	}
+	ticker := time.NewTicker(parsedTime)
+	for ; ; <-ticker.C {
+		feedToFetch, err := s.Db.GetNextFeedToFetch(context.Background())
+		if err != nil {
+			return errors.New("could not find next feed to fetch")
+		}
+		s.Db.MarkFeedFetched(context.Background(), feedToFetch.ID)
+		feed, err := fetchFeed(context.Background(), feedToFetch.Url)
+		if err != nil {
+			return errors.New("could not fetch feed")
+		}
+		for _, item := range feed.Channel.Item {
+			fmt.Println(item.Title)
+			if item.PubDate == "" {
+				item.PubDate = "N/A"
+			}
+			_, err := s.Db.CreatePost(context.Background(), database.CreatePostParams{
+				ID:          uuid.New(),
+				CreatedAt:   time.Now(),
+				UpdatedAt:   time.Now(),
+				Title:       item.Title,
+				Url:         item.Link,
+				Description: item.Description,
+				PublishedAt: item.PubDate,
+				FeedID:      feedToFetch.ID,
+			})
+			if err != nil {
+				fmt.Println(err)
+				fmt.Printf("%T\n", err)
+			}
+		}
+	}
 }
 
 func HandlerAddFeed(s *State, cmd Command, user database.User) error {
